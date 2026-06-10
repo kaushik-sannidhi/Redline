@@ -75,4 +75,5 @@ Manual smoke path:
 - Deploy the Next.js app to Vercel.
 - Configure Appwrite GitHub OAuth with success callback `/auth/callback` and failure callback `/dashboard?auth=github-failed`.
 - Set `BROWSERLESS_API_KEY` for reliable production Playwright execution. Redline derives the Browserless CDP WebSocket endpoints in code and tries the known regional endpoints before falling back to fetch-only crawling.
+- Novus by Pendo is installed in the root layout with the API key from the Novus branch. Set `NEXT_PUBLIC_NOVUS_APP_ID` only if you need to override that key.
 - Keep first scans anonymous; GitHub auth is only for saved history and repo analysis.
