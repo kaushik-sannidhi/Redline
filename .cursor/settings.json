@@ -1,0 +1,10 @@
+{
+  "plugins": {
+    "appwrite-plugin": {
+      "enabled": true
+    },
+    "gsap-skills": {
+      "enabled": true
+    }
+  }
+}
