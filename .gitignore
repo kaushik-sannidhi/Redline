@@ -6,4 +6,5 @@ coverage
 .env*.local
 *.tsbuildinfo
 dev-server*.log
+prod-server*.log
 .data

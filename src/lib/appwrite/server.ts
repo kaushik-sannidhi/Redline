@@ -6,9 +6,15 @@ export function getAppwriteSessionCookieName() {
   return `a_session_${env.APPWRITE_PROJECT_ID}`;
 }
 
+export function getAppwriteJwtCookieName() {
+  return "redline_appwrite_jwt";
+}
+
 function createBaseClient() {
   if (!env.APPWRITE_ENDPOINT || !env.APPWRITE_PROJECT_ID) return null;
-  return new Client().setEndpoint(env.APPWRITE_ENDPOINT).setProject(env.APPWRITE_PROJECT_ID);
+  const client = new Client().setEndpoint(env.APPWRITE_ENDPOINT).setProject(env.APPWRITE_PROJECT_ID);
+  if (process.env.NODE_ENV === "development") client.setSelfSigned(true);
+  return client;
 }
 
 export function createAppwriteAdminClient() {
@@ -23,14 +29,26 @@ export function createAppwriteAdminClient() {
   };
 }
 
+export function createAppwritePublicClient() {
+  const client = createBaseClient();
+  if (!client) return null;
+
+  return {
+    account: new Account(client),
+    tables: new TablesDB(client)
+  };
+}
+
 export function createAppwriteSessionClient() {
   if (!hasAppwriteSessionConfig()) return null;
   const client = createBaseClient();
   if (!client) return null;
 
+  const jwt = cookies().get(getAppwriteJwtCookieName())?.value;
   const session = cookies().get(getAppwriteSessionCookieName())?.value;
-  if (!session) return null;
-  client.setSession(session);
+  if (jwt) client.setJWT(jwt);
+  else if (session) client.setSession(session);
+  else return null;
 
   return {
     account: new Account(client),

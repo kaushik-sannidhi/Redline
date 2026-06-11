@@ -1,5 +1,7 @@
 export default function VulnerableDemoPage() {
   const fakeOpenAiKey = "sk-demo1234567890abcdefghijklmnopqrstuvwxyz1234";
+  const fakeGithubToken = "ghp_1234567890abcdefghijklmnopqrstuvwxyz123456";
+  const fakeAwsKey = "AKIA1234567890ABCDEF";
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
@@ -13,8 +15,10 @@ export default function VulnerableDemoPage() {
             const user = { email: "founder@example.com" };
             const token = "demo_auth_token_1234567890abcdef";
             const OPENAI_API_KEY = "${fakeOpenAiKey}";
+            const GITHUB_TOKEN = "${fakeGithubToken}";
+            const AWS_ACCESS_KEY_ID = "${fakeAwsKey}";
             localStorage.setItem("auth_token", token);
-            console.log(user.email, OPENAI_API_KEY);
+            console.log(user.email, OPENAI_API_KEY, GITHUB_TOKEN, AWS_ACCESS_KEY_ID);
           `
         }}
       />

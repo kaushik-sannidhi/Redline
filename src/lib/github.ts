@@ -27,6 +27,7 @@ type GitHubRepo = {
 type GitHubTreeItem = {
   path: string;
   type: "blob" | "tree" | string;
+  sha?: string;
   size?: number;
   url?: string;
 };
@@ -34,13 +35,89 @@ type GitHubTreeItem = {
 export type GitHubSourceFile = {
   path: string;
   content: string;
+  sha?: string;
+};
+
+export type GitHubRepository = {
+  id: number;
+  name: string;
+  fullName: string;
+  htmlUrl: string;
+  private: boolean;
+  defaultBranch: string;
+  pushedAt?: string | null;
+  permissions?: {
+    admin?: boolean;
+    maintain?: boolean;
+    push?: boolean;
+  };
+};
+
+export type GitHubPullRequestResult = {
+  branchName: string;
+  number: number;
+  url: string;
+};
+
+type GitHubRepositoryApiResponse = {
+  id: number;
+  name: string;
+  full_name: string;
+  html_url: string;
+  private: boolean;
+  default_branch?: string;
+  pushed_at?: string | null;
+  permissions?: GitHubRepository["permissions"];
+};
+
+type GitHubBlobApiResponse = {
+  content?: string;
+  encoding?: string;
 };
 
 function githubHeaders(accessToken?: string | null): HeadersInit {
   return {
     Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
   };
+}
+
+function toRepository(repo: GitHubRepositoryApiResponse): GitHubRepository {
+  return {
+    id: repo.id,
+    name: repo.name,
+    fullName: repo.full_name,
+    htmlUrl: repo.html_url,
+    private: repo.private,
+    defaultBranch: repo.default_branch ?? "main",
+    pushedAt: repo.pushed_at ?? null,
+    permissions: repo.permissions
+  };
+}
+
+async function githubJson<T>(
+  pathOrUrl: string,
+  accessToken: string,
+  init: RequestInit = {}
+): Promise<T> {
+  const url = pathOrUrl.startsWith("https://") ? pathOrUrl : `https://api.github.com${pathOrUrl}`;
+  const response = await fetch(url, {
+    ...init,
+    cache: "no-store",
+    headers: {
+      ...githubHeaders(accessToken),
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...init.headers
+    }
+  });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || `GitHub request failed with ${response.status}`);
+  }
+
+  return (await response.json()) as T;
 }
 
 function extensionFor(path: string) {
@@ -73,6 +150,21 @@ export function githubRawPackageUrl(repoUrl: string) {
   const parsed = parseGitHubRepoUrl(repoUrl);
   if (!parsed) return null;
   return `https://raw.githubusercontent.com/${parsed.owner}/${parsed.repo}/main/package.json`;
+}
+
+export async function listGitHubRepositories(accessToken: string): Promise<GitHubRepository[]> {
+  const repos: GitHubRepositoryApiResponse[] = [];
+
+  for (let page = 1; page <= 10; page++) {
+    const batch = await githubJson<GitHubRepositoryApiResponse[]>(
+      `/user/repos?per_page=100&page=${page}&sort=pushed&affiliation=owner,collaborator,organization_member`,
+      accessToken
+    );
+    repos.push(...batch);
+    if (batch.length < 100) break;
+  }
+
+  return repos.map(toRepository);
 }
 
 export async function fetchGitHubPackageJson(repoUrl: string, accessToken?: string | null) {
@@ -134,16 +226,34 @@ export async function fetchGitHubSourceFiles(repoUrl: string, accessToken?: stri
 
     for (const file of files) {
       if (total >= SOURCE_CHAR_LIMIT) break;
-      const rawUrl = `https://raw.githubusercontent.com/${parsed.owner}/${parsed.repo}/${branch}/${file.path}`;
-      const response = await fetch(rawUrl, {
-        cache: "no-store",
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
-      });
-      if (!response.ok) continue;
-
       const remaining = SOURCE_CHAR_LIMIT - total;
-      const text = (await response.text()).slice(0, remaining);
-      sourceFiles.push({ path: file.path, content: text });
+      let text = "";
+
+      try {
+        if (accessToken && file.sha) {
+          const blob = await githubJson<GitHubBlobApiResponse>(
+            `/repos/${parsed.owner}/${parsed.repo}/git/blobs/${file.sha}`,
+            accessToken
+          );
+          text =
+            blob.encoding === "base64" && blob.content
+              ? Buffer.from(blob.content.replace(/\s/g, ""), "base64").toString("utf8")
+              : "";
+        } else {
+          const rawUrl = `https://raw.githubusercontent.com/${parsed.owner}/${parsed.repo}/${branch}/${file.path}`;
+          const response = await fetch(rawUrl, {
+            cache: "no-store",
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
+          });
+          if (!response.ok) continue;
+          text = await response.text();
+        }
+      } catch {
+        continue;
+      }
+
+      text = text.slice(0, remaining);
+      sourceFiles.push({ path: file.path, content: text, sha: file.sha });
       total += text.length;
     }
 
@@ -151,4 +261,75 @@ export async function fetchGitHubSourceFiles(repoUrl: string, accessToken?: stri
   } catch {
     return [];
   }
+}
+
+export async function createGitHubPullRequest(input: {
+  repoUrl: string;
+  accessToken: string;
+  title: string;
+  body: string;
+  files: Array<Pick<GitHubSourceFile, "path" | "sha"> & { fixed: string }>;
+  branchPrefix?: string;
+}): Promise<GitHubPullRequestResult> {
+  const parsed = parseGitHubRepoUrl(input.repoUrl);
+  if (!parsed) throw new Error("Only github.com repository URLs are supported");
+
+  const repo = await githubJson<GitHubRepositoryApiResponse>(
+    `/repos/${parsed.owner}/${parsed.repo}`,
+    input.accessToken
+  );
+  const defaultBranch = repo.default_branch ?? "main";
+  const ref = await githubJson<{ object?: { sha?: string } }>(
+    `/repos/${parsed.owner}/${parsed.repo}/git/ref/heads/${encodeURIComponent(defaultBranch)}`,
+    input.accessToken
+  );
+  const baseSha = ref.object?.sha;
+  if (!baseSha) throw new Error("Could not read the repository default branch");
+
+  const safePrefix = (input.branchPrefix ?? "redline-fix").replace(/[^a-zA-Z0-9/_-]/g, "-");
+  const branchName = `${safePrefix}-${Date.now()}`;
+
+  await githubJson(`/repos/${parsed.owner}/${parsed.repo}/git/refs`, input.accessToken, {
+    method: "POST",
+    body: JSON.stringify({
+      ref: `refs/heads/${branchName}`,
+      sha: baseSha
+    })
+  });
+
+  const changedFiles = input.files.filter((file) => file.fixed.trim().length);
+  if (!changedFiles.length) throw new Error("Gemini did not produce any file changes");
+
+  for (const file of changedFiles) {
+    await githubJson(`/repos/${parsed.owner}/${parsed.repo}/contents/${encodeURIComponent(file.path).replace(/%2F/g, "/")}`, input.accessToken, {
+      method: "PUT",
+      body: JSON.stringify({
+        message: `Fix Redline finding in ${file.path}`,
+        content: Buffer.from(file.fixed, "utf8").toString("base64"),
+        branch: branchName,
+        ...(file.sha ? { sha: file.sha } : {})
+      })
+    });
+  }
+
+  const pullRequest = await githubJson<{ number: number; html_url: string }>(
+    `/repos/${parsed.owner}/${parsed.repo}/pulls`,
+    input.accessToken,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        title: input.title,
+        head: branchName,
+        base: defaultBranch,
+        body: input.body,
+        maintainer_can_modify: true
+      })
+    }
+  );
+
+  return {
+    branchName,
+    number: pullRequest.number,
+    url: pullRequest.html_url
+  };
 }

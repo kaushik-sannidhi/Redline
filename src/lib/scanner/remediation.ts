@@ -18,13 +18,14 @@ function fallbackFix(file: GitHubSourceFile, findings: Finding[]): RemediationRe
     filePath: file.path,
     original: file.content,
     fixed,
+    sha: file.sha,
     changesSummary: "Added a Redline remediation note because Gemini is not configured for automatic rewriting."
   };
 }
 
 async function callGemini(prompt: string, maxOutputTokens = 4096) {
   if (!env.GEMINI_API_KEY) return "";
-  const model = env.GEMINI_MODEL || "gemini-2.0-flash";
+  const model = env.GEMINI_MODEL || "gemini-3.5-flash";
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: {
@@ -33,7 +34,7 @@ async function callGemini(prompt: string, maxOutputTokens = 4096) {
     },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens }
+      generationConfig: { maxOutputTokens }
     })
   });
 
@@ -92,6 +93,7 @@ ${file.content}`;
       filePath: file.path,
       original: file.content,
       fixed: fixed || file.content,
+      sha: file.sha,
       changesSummary: `Rewrote ${fileFindings.length} finding${fileFindings.length === 1 ? "" : "s"} in ${file.path}.`
     });
   }

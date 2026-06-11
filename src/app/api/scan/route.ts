@@ -13,11 +13,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid scan request" }, { status: 400 });
   }
 
-  const scan = await createScan({
-    url: parsed.data.url,
-    repoUrl: parsed.data.repoUrl || null,
-    userId: await getAuthenticatedUserId()
-  });
+  let scan;
+  try {
+    scan = await createScan({
+      url: parsed.data.url,
+      repoUrl: parsed.data.repoUrl || null,
+      userId: await getAuthenticatedUserId()
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Could not store scan in Appwrite" },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({ scanHash: scan.hash });
 }

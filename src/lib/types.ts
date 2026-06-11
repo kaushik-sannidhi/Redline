@@ -61,4 +61,14 @@ export interface RemediationResult {
   original: string;
   fixed: string;
   changesSummary: string;
+  sha?: string;
+}
+
+export interface RemediationPullRequest {
+  finding: Finding;
+  pullRequestUrl?: string;
+  pullRequestNumber?: number;
+  branchName?: string;
+  results: RemediationResult[];
+  error?: string;
 }

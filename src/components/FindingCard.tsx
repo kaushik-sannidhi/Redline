@@ -47,7 +47,7 @@ export function FindingCard({ finding, stack }: { finding: Finding; stack: strin
 
   return (
     <article className="rounded border border-line bg-white p-5 shadow-crisp">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-start">
         <button
           className="min-w-0 flex-1 text-left"
           onClick={() => {
@@ -64,7 +64,7 @@ export function FindingCard({ finding, stack }: { finding: Finding; stack: strin
           ) : null}
           <h3 className="mt-3 text-xl font-black text-ink">{finding.title}</h3>
         </button>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <button
             className="rounded border border-line px-3 py-2 text-sm font-semibold hover:border-ink"
             onClick={requestAiFix}

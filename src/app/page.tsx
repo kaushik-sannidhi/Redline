@@ -1,102 +1,105 @@
-import Link from "next/link";
+import { headers } from "next/headers";
 import { SiteHeader } from "@/components/SiteHeader";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { UrlScanForm } from "@/components/UrlScanForm";
+import { env } from "@/lib/env";
 import { getScanStats } from "@/lib/scans";
 
-const onboarding = [
-  {
-    title: "Create a workspace",
-    text: "Sign in with GitHub for repo analysis, or use email locally while you are testing the flow."
-  },
-  {
-    title: "Scan the deployed URL",
-    text: "Paste the link you are about to send to real users. Redline logs every run in the dashboard."
-  },
-  {
-    title: "Fix and rescan",
-    text: "Open the report, filter by severity, ask Gemini for fixes, download remediated files, then run it again."
-  }
-];
-
 const commonFindings = [
-  "API keys shipped in public JavaScript bundles",
-  "No XSS protection header",
-  "Cross-site request rules set to allow everyone",
-  "Auth tokens stored in browser storage",
-  "Debug logs printing user data"
+  { severity: "Critical", title: "API keys shipped in public JavaScript bundles" },
+  { severity: "High", title: "No XSS protection header" },
+  { severity: "High", title: "Cross-site request rules set to allow everyone" },
+  { severity: "High", title: "Auth tokens stored in browser storage" },
+  { severity: "Medium", title: "Debug logs printing user data" }
 ];
 
 export default async function Home() {
-  const [user, stats] = await Promise.all([getAuthenticatedUser(), getScanStats()]);
-  const primaryHref = user ? "/dashboard" : "/sign-up";
+  const stats = await getScanStats();
+  const host = headers().get("host") ?? "localhost:3000";
+  const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
+  const demoUrl = env.DEMO_APP_URL || `${proto}://${host}/demo`;
 
   return (
-    <main>
-      <SiteHeader />
-      <section className="mx-auto grid min-h-[calc(100vh-65px)] max-w-6xl content-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr]">
+    <main className="min-h-screen bg-[#0a0a0a] text-white">
+      <SiteHeader variant="dark" />
+      <section className="mx-auto grid min-h-[calc(100vh-65px)] max-w-6xl content-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[1.02fr_0.98fr]">
         <div className="flex flex-col justify-center">
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.16em] text-danger">Pre-launch security workspace</p>
-          <h1 className="max-w-3xl text-5xl font-black leading-[0.95] text-ink sm:text-6xl lg:text-7xl">
+          <h1 className="max-w-3xl text-5xl font-black leading-none text-white sm:text-6xl lg:text-7xl">
             Run this before you share the link.
           </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-gray-700">
-            Redline gives founders a dashboard for scanning AI-built apps, tracking every run, and turning findings into plain-English fixes.
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300">
+            Redline scans AI-built apps for security issues. Every finding is plain English, ranked by severity, and paired with a concrete fix.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link className="rounded bg-ink px-5 py-3 font-semibold text-white" href={primaryHref}>
-              {user ? "Open dashboard" : "Start free scan"}
-            </Link>
-            <Link className="rounded border border-line bg-white px-5 py-3 font-semibold hover:border-ink" href="/sign-in">
-              Sign in
-            </Link>
+          <div className="mt-8">
+            <UrlScanForm defaultUrl={demoUrl} />
           </div>
-          <p className="mt-6 text-sm font-medium text-gray-600">Built by a MITRE security researcher. Designed for the moment before launch.</p>
+          <p className="mt-6 text-sm font-medium text-zinc-400">Built by a MITRE security researcher. No account required for the first scan.</p>
         </div>
 
         <div className="grid content-center gap-4">
-          <div className="rounded border border-line bg-white p-5 shadow-crisp">
-            <div className="grid grid-cols-3 divide-x divide-line text-center">
+          <div className="rounded border border-white/10 bg-zinc-950 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
-                <p className="text-3xl font-black text-ink">{stats.scansRun}</p>
-                <p className="text-xs uppercase tracking-wide text-gray-500">scans logged</p>
+                <p className="font-mono text-sm text-red-400">latest demo report</p>
+                <h2 className="mt-1 text-2xl font-black">Not ready to ship</h2>
               </div>
-              <div>
-                <p className="text-3xl font-black text-danger">{stats.keysFound}</p>
-                <p className="text-xs uppercase tracking-wide text-gray-500">keys found</p>
-              </div>
-              <div>
-                <p className="text-3xl font-black text-ready">{stats.appsSecured}</p>
-                <p className="text-xs uppercase tracking-wide text-gray-500">apps secured</p>
-              </div>
+              <p className="font-mono text-5xl font-black text-red-400">18</p>
             </div>
-          </div>
-
-          <section className="rounded border border-line bg-white p-5 shadow-crisp">
-            <h2 className="text-xl font-black text-ink">How onboarding works</h2>
-            <div className="mt-4 space-y-4">
-              {onboarding.map((step, index) => (
-                <div className="flex gap-3" key={step.title}>
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded bg-paper text-sm font-black text-ink">{index + 1}</span>
+            <div className="mt-5 grid grid-cols-4 gap-2 text-center">
+              {[
+                ["3", "Critical"],
+                ["5", "High"],
+                ["2", "Medium"],
+                ["4", "Low"]
+              ].map(([count, label]) => (
+                <div className="rounded bg-white/[0.04] p-3" key={label}>
+                  <p className="font-mono text-2xl font-black">{count}</p>
+                  <p className="mt-1 text-xs text-zinc-500">{label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 flex flex-col gap-3">
+              {commonFindings.slice(0, 3).map((finding) => (
+                <div className="flex items-start gap-3 rounded border border-white/10 bg-black p-3" key={finding.title}>
+                  <span className="mt-1 h-2 w-2 rounded-full bg-red-500" />
                   <div>
-                    <h3 className="font-black text-ink">{step.title}</h3>
-                    <p className="mt-1 text-sm leading-6 text-gray-600">{step.text}</p>
+                    <p className="font-mono text-xs text-red-300">{finding.severity}</p>
+                    <p className="mt-1 text-sm text-zinc-200">{finding.title}</p>
                   </div>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
 
-          <section className="rounded border border-line bg-white p-5 shadow-crisp">
-            <h2 className="text-xl font-black text-ink">Common issues Redline catches</h2>
-            <ol className="mt-4 space-y-3">
-              {commonFindings.map((finding, index) => (
-                <li className="flex gap-3 text-sm text-gray-700" key={finding}>
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-paper font-bold text-ink">{index + 1}</span>
-                  {finding}
-                </li>
-              ))}
-            </ol>
-          </section>
+          <div className="rounded border border-white/10 bg-zinc-950 p-5">
+            <div className="grid grid-cols-3 divide-x divide-white/10 text-center">
+              <div>
+                <p className="font-mono text-3xl font-black text-white">{stats.scansRun}</p>
+                <p className="text-xs text-zinc-500">scans run</p>
+              </div>
+              <div>
+                <p className="font-mono text-3xl font-black text-red-400">{stats.keysFound}</p>
+                <p className="text-xs text-zinc-500">API keys found</p>
+              </div>
+              <div>
+                <p className="font-mono text-3xl font-black text-emerald-400">{stats.appsSecured}</p>
+                <p className="text-xs text-zinc-500">apps secured</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t border-white/10 bg-zinc-950 px-4 py-12 sm:px-6">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="text-3xl font-black text-white">What Redline finds in 7 out of 10 vibe-coded apps</h2>
+          <div className="mt-6 grid gap-3 lg:grid-cols-5">
+            {commonFindings.map((finding) => (
+              <div className="rounded border border-white/10 bg-black p-4" key={finding.title}>
+                <p className="font-mono text-xs text-red-300">{finding.severity}</p>
+                <p className="mt-3 text-sm leading-6 text-zinc-200">{finding.title}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </main>

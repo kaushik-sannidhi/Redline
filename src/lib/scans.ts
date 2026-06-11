@@ -24,6 +24,7 @@ type ScanRow = Models.Row & {
 
 const memoryScans = new Map<string, Scan>();
 const localStorePath = path.join(process.cwd(), ".data", "scans.json");
+let schemaReady: Promise<void> | null = null;
 
 function now() {
   return new Date().toISOString();
@@ -96,6 +97,68 @@ function makeScan(input: { url: string; repoUrl?: string | null; userId?: string
   };
 }
 
+function isMissingResource(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return message.includes("could not be found") || message.includes("not found");
+}
+
+function isAlreadyExists(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return message.includes("already exists") || message.includes("already in use");
+}
+
+async function ignoreExisting(operation: Promise<unknown>) {
+  try {
+    await operation;
+  } catch (error) {
+    if (!isAlreadyExists(error)) throw error;
+  }
+}
+
+async function ensureTable(appwrite: NonNullable<ReturnType<typeof createAppwriteAdminClient>>, databaseId: string, tableId: string, name: string) {
+  try {
+    await appwrite.tables.getTable({ databaseId, tableId });
+  } catch (error) {
+    if (!isMissingResource(error)) throw error;
+    await appwrite.tables.createTable({ databaseId, tableId, name, enabled: true });
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
+async function ensureAppwriteSchema() {
+  const appwrite = createAppwriteAdminClient();
+  const tableIds = getAppwriteTableIds();
+  if (!appwrite || !tableIds) return;
+
+  await ensureTable(appwrite, tableIds.databaseId, tableIds.scansTableId, "Scans");
+  await ignoreExisting(appwrite.tables.createStringColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "hash", size: 64, required: true }));
+  await ignoreExisting(appwrite.tables.createStringColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "url", size: 2048, required: true }));
+  await ignoreExisting(appwrite.tables.createStringColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "repoUrl", size: 2048, required: false }));
+  await ignoreExisting(appwrite.tables.createTextColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "stackJson", required: true }));
+  await ignoreExisting(appwrite.tables.createIntegerColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "score", required: true, min: 0, max: 100 }));
+  await ignoreExisting(appwrite.tables.createTextColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "findingsJson", required: true }));
+  await ignoreExisting(appwrite.tables.createTextColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "summaryJson", required: true }));
+  await ignoreExisting(appwrite.tables.createStringColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "userId", size: 64, required: false }));
+  await ignoreExisting(appwrite.tables.createStringColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "status", size: 32, required: true }));
+  await ignoreExisting(appwrite.tables.createStringColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "error", size: 2048, required: false }));
+  await ignoreExisting(appwrite.tables.createIntegerColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "previousScore", required: false, min: 0, max: 100 }));
+  await ignoreExisting(appwrite.tables.createDatetimeColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "createdAt", required: true }));
+  await ignoreExisting(appwrite.tables.createDatetimeColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "completedAt", required: false }));
+  await ignoreExisting(appwrite.tables.createBooleanColumn({ databaseId: tableIds.databaseId, tableId: tableIds.scansTableId, key: "isPublic", required: true }));
+
+  await ensureTable(appwrite, tableIds.databaseId, tableIds.badgesTableId, "Badges");
+  await ignoreExisting(appwrite.tables.createStringColumn({ databaseId: tableIds.databaseId, tableId: tableIds.badgesTableId, key: "scanHash", size: 64, required: true }));
+  await ignoreExisting(appwrite.tables.createIntegerColumn({ databaseId: tableIds.databaseId, tableId: tableIds.badgesTableId, key: "lastScore", required: true, min: 0, max: 100 }));
+  await ignoreExisting(appwrite.tables.createDatetimeColumn({ databaseId: tableIds.databaseId, tableId: tableIds.badgesTableId, key: "lastScannedAt", required: true }));
+
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+}
+
+async function ensureSchemaOnce() {
+  schemaReady ??= ensureAppwriteSchema();
+  return schemaReady;
+}
+
 export async function createScan(input: { url: string; repoUrl?: string | null; userId?: string | null; previousScore?: number | null }) {
   const scan = makeScan(input);
   const appwrite = createAppwriteAdminClient();
@@ -105,18 +168,21 @@ export async function createScan(input: { url: string; repoUrl?: string | null; 
     await writeLocalScans([scan, ...(await readLocalScans())]);
     return scan;
   }
+  try {
+    await ensureSchemaOnce();
 
-  const row = await appwrite.tables.createRow<ScanRow>({
-    databaseId: tableIds.databaseId,
-    tableId: tableIds.scansTableId,
-    rowId: ID.unique(),
-    data: scanToRowData(scan)
-  }).catch(async () => {
+    const row = await appwrite.tables.createRow<ScanRow>({
+      databaseId: tableIds.databaseId,
+      tableId: tableIds.scansTableId,
+      rowId: ID.unique(),
+      data: scanToRowData(scan)
+    });
+
+    return rowToScan(row);
+  } catch {
     await writeLocalScans([scan, ...(await readLocalScans())]);
-    return null;
-  });
-
-  return row ? rowToScan(row) : scan;
+    return scan;
+  }
 }
 
 export async function getScan(hash: string): Promise<Scan | null> {
@@ -131,7 +197,7 @@ export async function getScan(hash: string): Promise<Scan | null> {
       queries: [Query.equal("hash", hash), Query.limit(1)]
     });
     const row = rows.rows[0];
-    return row ? rowToScan(row) : null;
+    return row ? rowToScan(row) : (await readLocalScans()).find((scan) => scan.hash === hash) ?? null;
   } catch {
     return (await readLocalScans()).find((scan) => scan.hash === hash) ?? null;
   }
@@ -253,19 +319,20 @@ export async function updateScan(
     return updated;
   }
 
-  const row = await appwrite.tables.updateRow<ScanRow>({
-    databaseId: tableIds.databaseId,
-    tableId: tableIds.scansTableId,
-    rowId: existing.id,
-    data: scanToRowData(updated)
-  }).catch(async () => {
-    const scans = await readLocalScans();
-    const hasExisting = scans.some((scan) => scan.hash === hash);
-    await writeLocalScans(hasExisting ? scans.map((scan) => (scan.hash === hash ? updated : scan)) : [updated, ...scans]);
-    return null;
-  });
+  try {
+    const row = await appwrite.tables.updateRow<ScanRow>({
+      databaseId: tableIds.databaseId,
+      tableId: tableIds.scansTableId,
+      rowId: existing.id,
+      data: scanToRowData(updated)
+    });
 
-  return row ? rowToScan(row) : updated;
+    return rowToScan(row);
+  } catch {
+    const scans = await readLocalScans();
+    await writeLocalScans(scans.map((scan) => (scan.hash === hash ? updated : scan)));
+    return updated;
+  }
 }
 
 export async function upsertBadge(scan: Scan) {

@@ -6,7 +6,7 @@ export function SignOutButton() {
   const router = useRouter();
 
   async function signOut() {
-    await fetch("/api/auth/dev", { method: "DELETE" });
+    await fetch("/api/auth/session", { method: "DELETE" });
     router.push("/");
     router.refresh();
   }

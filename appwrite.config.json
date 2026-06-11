@@ -1,0 +1,28 @@
+{
+  "projectId": "${APPWRITE_PROJECT_ID}",
+  "endpoint": "${APPWRITE_ENDPOINT}",
+  "functions": [
+    {
+      "$id": "redline-scan-worker",
+      "name": "Redline Scan Worker",
+      "enabled": true,
+      "live": true,
+      "logging": true,
+      "runtime": "node-20.0",
+      "deployment": "",
+      "vars": [
+        {
+          "key": "APP_URL",
+          "value": "${NEXT_PUBLIC_APP_URL}"
+        }
+      ],
+      "events": [],
+      "schedule": "",
+      "timeout": 60,
+      "entrypoint": "src/main.js",
+      "commands": "npm install",
+      "version": "v3",
+      "path": "appwrite/functions/scan-worker"
+    }
+  ]
+}

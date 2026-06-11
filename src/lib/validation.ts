@@ -18,3 +18,9 @@ export const rescanRequestSchema = z.object({
 export const githubAnalyzeRequestSchema = z.object({
   repoUrl: z.string().trim().url()
 });
+
+export const remediateRequestSchema = z.object({
+  hash: z.string().min(4).max(64),
+  findingIds: z.array(z.string().min(1)).min(1).max(20).optional(),
+  findingIndexes: z.array(z.number().int().min(0)).min(1).max(20).optional()
+});

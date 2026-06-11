@@ -2,11 +2,22 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Account, Client, ID } from "appwrite";
 import { ConnectGitHubButton } from "@/components/ConnectGitHubButton";
 
-export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
+export function AuthForm({
+  appwriteEndpoint,
+  appwriteProjectId,
+  mode
+}: {
+  appwriteEndpoint: string;
+  appwriteProjectId: string;
+  mode: "sign-in" | "sign-up";
+}) {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -14,10 +25,31 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
     setIsSubmitting(true);
     setError("");
     try {
-      const response = await fetch("/api/auth/dev", {
+      if (!appwriteEndpoint || !appwriteProjectId) {
+        throw new Error("Appwrite endpoint and project ID are not configured.");
+      }
+
+      const client = new Client().setEndpoint(appwriteEndpoint).setProject(appwriteProjectId);
+      const account = new Account(client);
+
+      await account.deleteSession({ sessionId: "current" }).catch(() => undefined);
+
+      if (mode === "sign-up") {
+        await account.create({
+          userId: ID.unique(),
+          email,
+          password,
+          name: name || email.split("@")[0]
+        });
+      }
+
+      await account.createEmailPasswordSession({ email, password });
+      const { jwt } = await account.createJWT();
+
+      const response = await fetch("/api/auth/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, mode })
+        body: JSON.stringify({ jwt })
       });
       const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error ?? "Could not continue");
@@ -35,7 +67,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       <div>
         <h1 className="text-3xl font-black text-ink">{mode === "sign-up" ? "Create your Redline workspace" : "Sign in to Redline"}</h1>
         <p className="mt-2 text-sm leading-6 text-gray-600">
-          Use GitHub for repository analysis, or continue with email locally to test the full dashboard flow.
+          Use GitHub for repository analysis, or create an Appwrite account with email and password.
         </p>
       </div>
       <div className="mt-6">
@@ -43,7 +75,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       </div>
       <div className="my-6 flex items-center gap-3 text-xs font-bold uppercase tracking-wide text-gray-400">
         <span className="h-px flex-1 bg-line" />
-        Email
+        Email and password
         <span className="h-px flex-1 bg-line" />
       </div>
       <form
@@ -53,6 +85,21 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
           void submit();
         }}
       >
+        {mode === "sign-up" ? (
+          <div>
+            <label className="text-sm font-semibold text-gray-700" htmlFor="name">
+              Name
+            </label>
+            <input
+              className="mt-2 min-h-12 w-full rounded border border-line px-4 outline-none focus:border-ink"
+              id="name"
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Founder Name"
+              type="text"
+              value={name}
+            />
+          </div>
+        ) : null}
         <div>
           <label className="text-sm font-semibold text-gray-700" htmlFor="email">
             Work email
@@ -65,6 +112,21 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
             required
             type="email"
             value={email}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-semibold text-gray-700" htmlFor="password">
+            Password
+          </label>
+          <input
+            className="mt-2 min-h-12 w-full rounded border border-line px-4 outline-none focus:border-ink"
+            id="password"
+            minLength={8}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="At least 8 characters"
+            required
+            type="password"
+            value={password}
           />
         </div>
         <button

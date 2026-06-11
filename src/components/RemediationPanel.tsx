@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import JSZip from "jszip";
 import { DiffViewer } from "@/components/DiffViewer";
-import type { Finding, RemediationResult } from "@/lib/types";
+import type { Finding, RemediationPullRequest } from "@/lib/types";
 import { track } from "@/lib/analytics";
 
 export function RemediationPanel({
@@ -13,42 +12,42 @@ export function RemediationPanel({
   hash: string;
   autoFixableFindings: Finding[];
 }) {
-  const [results, setResults] = useState<RemediationResult[]>([]);
+  const [selectedIndexes, setSelectedIndexes] = useState<number[]>(() => autoFixableFindings.map((_, index) => index));
+  const [pullRequests, setPullRequests] = useState<RemediationPullRequest[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function startRemediation() {
+    if (!selectedIndexes.length) {
+      setError("Select at least one finding to fix.");
+      return;
+    }
+
     setIsLoading(true);
     setError("");
-    track("remediation_started", { file_count: autoFixableFindings.length });
+    track("remediation_started", { finding_count: selectedIndexes.length });
 
     try {
       const response = await fetch("/api/remediate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hash })
+        body: JSON.stringify({ hash, findingIndexes: selectedIndexes })
       });
-      const data = (await response.json()) as { results?: RemediationResult[]; error?: string };
+      const data = (await response.json()) as { pullRequests?: RemediationPullRequest[]; error?: string };
       if (!response.ok) throw new Error(data.error ?? "Could not remediate files");
-      setResults(data.results ?? []);
-      track("remediation_completed", { file_count: data.results?.length ?? 0 });
+      setPullRequests(data.pullRequests ?? []);
+      track("remediation_completed", { pull_request_count: data.pullRequests?.filter((item) => item.pullRequestUrl).length ?? 0 });
     } catch (remediationError) {
-      setError(remediationError instanceof Error ? remediationError.message : "Could not remediate files");
+      setError(remediationError instanceof Error ? remediationError.message : "Could not create pull requests");
     } finally {
       setIsLoading(false);
     }
   }
 
-  async function downloadFixedFiles() {
-    const zip = new JSZip();
-    results.forEach((result) => zip.file(result.filePath, result.fixed));
-    const blob = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `redline-fixed-${hash}.zip`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  function toggleFinding(index: number) {
+    setSelectedIndexes((current) =>
+      current.includes(index) ? current.filter((item) => item !== index) : [...current, index].sort((a, b) => a - b)
+    );
   }
 
   if (!autoFixableFindings.length) return null;
@@ -59,34 +58,82 @@ export function RemediationPanel({
         <div>
           <h2 className="text-xl font-black text-ink">Gemini code remediation</h2>
           <p className="mt-1 text-sm text-gray-600">
-            {autoFixableFindings.length} finding{autoFixableFindings.length === 1 ? "" : "s"} can be rewritten or packaged as a fix plan.
+            Select findings and Redline will ask Gemini for focused code changes, then open one GitHub pull request per bug.
           </p>
         </div>
-        <button
-          className="rounded bg-ink px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isLoading}
-          onClick={startRemediation}
-          type="button"
-        >
-          {isLoading ? "Gemini is rewriting..." : `Fix ${autoFixableFindings.length} with Gemini`}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="rounded border border-line px-4 py-2 text-sm font-semibold hover:border-ink"
+            onClick={() => setSelectedIndexes(autoFixableFindings.map((_, index) => index))}
+            type="button"
+          >
+            Select all
+          </button>
+          <button
+            className="rounded bg-ink px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isLoading || !selectedIndexes.length}
+            onClick={startRemediation}
+            type="button"
+          >
+            {isLoading ? "Opening PRs..." : `Fix ${selectedIndexes.length} selected`}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        {autoFixableFindings.map((finding, index) => (
+          <label className="flex items-start gap-3 rounded border border-line p-3" key={`${finding.id}-${index}`}>
+            <input
+              checked={selectedIndexes.includes(index)}
+              className="mt-1"
+              onChange={() => toggleFinding(index)}
+              type="checkbox"
+            />
+            <span>
+              <span className="block text-sm font-black text-ink">{finding.title}</span>
+              <span className="mt-1 block text-xs font-bold uppercase tracking-wide text-gray-500">{finding.severity}</span>
+            </span>
+          </label>
+        ))}
       </div>
 
       {error ? <p className="mt-4 rounded bg-red-50 p-3 text-sm font-semibold text-danger">{error}</p> : null}
 
-      {results.length ? (
+      {pullRequests.length ? (
         <div className="mt-5 space-y-4">
-          <button className="rounded border border-line px-4 py-2 text-sm font-semibold hover:border-ink" onClick={downloadFixedFiles} type="button">
-            Download fixed files
-          </button>
-          {results.map((result) => (
-            <DiffViewer
-              changesSummary={result.changesSummary}
-              filePath={result.filePath}
-              fixed={result.fixed}
-              key={result.filePath}
-              original={result.original}
-            />
+          {pullRequests.map((request) => (
+            <article className="rounded border border-line bg-white p-4" key={`${request.finding.id}-${request.pullRequestUrl ?? request.error}`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-black text-ink">{request.finding.title}</h3>
+                  <p className="mt-1 text-sm text-gray-600">{request.finding.fix}</p>
+                </div>
+                {request.pullRequestUrl ? (
+                  <a
+                    className="rounded bg-ink px-4 py-2 text-sm font-semibold text-white"
+                    href={request.pullRequestUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    PR #{request.pullRequestNumber}
+                  </a>
+                ) : null}
+              </div>
+              {request.error ? <p className="mt-3 rounded bg-red-50 p-3 text-sm font-semibold text-danger">{request.error}</p> : null}
+              {request.results.length ? (
+                <div className="mt-4 space-y-3">
+                  {request.results.map((result) => (
+                    <DiffViewer
+                      changesSummary={result.changesSummary}
+                      filePath={result.filePath}
+                      fixed={result.fixed}
+                      key={`${request.finding.id}-${result.filePath}`}
+                      original={result.original}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </article>
           ))}
         </div>
       ) : null}

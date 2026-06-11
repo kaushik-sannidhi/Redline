@@ -10,7 +10,6 @@ const envSchema = z.object({
   APPWRITE_DATABASE_ID: z.string().optional(),
   APPWRITE_SCANS_TABLE_ID: z.string().optional(),
   APPWRITE_BADGES_TABLE_ID: z.string().optional(),
-  APPWRITE_FORCE_REMOTE: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
   BROWSERLESS_API_KEY: z.string().optional(),
@@ -27,7 +26,6 @@ export const env = {
 };
 
 export function hasAppwriteAdminConfig(): boolean {
-  if (process.env.NODE_ENV === "development" && env.APPWRITE_FORCE_REMOTE !== "true") return false;
   return Boolean(
     env.APPWRITE_ENDPOINT &&
       env.APPWRITE_PROJECT_ID &&

@@ -49,7 +49,7 @@ export default async function ReportPage({ params }: { params: { hash: string } 
           <div className="mt-8 rounded border border-line bg-white p-5 shadow-crisp">
             <h2 className="text-xl font-black text-ink">Connect a repo for code fixes</h2>
             <p className="mt-2 text-sm text-gray-600">
-              Add a GitHub repo URL when starting a scan to unlock Gemini file rewrites and downloadable fixed files.
+              Connect GitHub and choose a repository when starting a scan to unlock Gemini-generated pull requests.
             </p>
           </div>
         )}

@@ -35,6 +35,19 @@ function extractSameOriginLinks(html: string, baseUrl: string): string[] {
     .filter((value): value is string => Boolean(value && value.startsWith(origin)));
 }
 
+function extractSameOriginFormActions(html: string, baseUrl: string): string[] {
+  const origin = new URL(baseUrl).origin;
+  return Array.from(html.matchAll(/<form[^>]+action=["']([^"']+)["']/gi))
+    .map((match) => {
+      try {
+        return new URL(match[1], baseUrl).href;
+      } catch {
+        return null;
+      }
+    })
+    .filter((value): value is string => Boolean(value && value.startsWith(origin)));
+}
+
 function scanHtmlForCrawlFindings(html: string, pageUrl: string): Finding[] {
   const findings: Finding[] = [];
 
@@ -84,6 +97,34 @@ function scanHtmlForCrawlFindings(html: string, pageUrl: string): Finding[] {
   return findings;
 }
 
+async function scanFormActionHeaders(actionUrls: string[]): Promise<Finding[]> {
+  const findings: Finding[] = [];
+
+  for (const actionUrl of actionUrls) {
+    try {
+      const response = await fetch(actionUrl, { cache: "no-store" });
+      if (response.headers.get("access-control-allow-origin") === "*") {
+        findings.push({
+          id: "open-cors-form-action",
+          category: "crawl",
+          severity: "high",
+          title: "Any website can call this form endpoint",
+          what: "A form endpoint allows requests from every website.",
+          why: "A malicious site may be able to call this backend from a user's browser.",
+          fix: "Set Access-Control-Allow-Origin to your own domain instead of *.",
+          evidence: "Access-Control-Allow-Origin: *",
+          affected: [actionUrl],
+          autoFixable: true
+        });
+      }
+    } catch {
+      // Form endpoint checks are additive; a blocked endpoint should not fail the crawl.
+    }
+  }
+
+  return findings;
+}
+
 async function crawlWithFetch(url: string, headers: Record<string, string>): Promise<CrawlResult> {
   const visited = new Set<string>();
   const queue = [url];
@@ -103,6 +144,7 @@ async function crawlWithFetch(url: string, headers: Record<string, string>): Pro
       findings.push(...scanHtmlForCrawlFindings(html, current), ...scanTextForSecrets(html, current));
 
       for (const scriptUrl of extractScriptUrls(html, current)) scriptUrls.add(scriptUrl);
+      findings.push(...(await scanFormActionHeaders(extractSameOriginFormActions(html, current))));
       for (const link of extractSameOriginLinks(html, current)) {
         if (!visited.has(link)) queue.push(link);
       }
@@ -172,6 +214,7 @@ async function crawlWithBrowserlessEndpoint(endpoint: string, url: string, heade
         forms.some((form) => !form.querySelector('input[name*="csrf" i], input[name*="_token" i], input[name*="authenticity" i]'))
       );
       if (hasUnsafePostForm) findings.push(...scanHtmlForCrawlFindings('<form method="post"></form>', current));
+      findings.push(...(await scanFormActionHeaders(extractSameOriginFormActions(html, current))));
 
       const pageScripts = await page.locator("script[src]").evaluateAll((scripts) =>
         scripts.map((script) => (script as HTMLScriptElement).src)
