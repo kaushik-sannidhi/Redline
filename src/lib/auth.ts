@@ -1,4 +1,5 @@
 import { createAppwriteSessionClient } from "@/lib/appwrite/server";
+import { getStoredGitHubToken } from "@/lib/github-oauth";
 
 export type RedlineUser = {
   $id: string;
@@ -31,6 +32,9 @@ export async function getAuthenticatedUser(): Promise<RedlineUser | null> {
 }
 
 export async function getGithubProviderToken(): Promise<string | null> {
+  const storedToken = getStoredGitHubToken();
+  if (storedToken) return storedToken;
+
   const appwrite = createAppwriteSessionClient();
   if (!appwrite) return null;
 

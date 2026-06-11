@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { Account, Client, TablesDB } from "node-appwrite";
+import { Account, Client, TablesDB, Users } from "node-appwrite";
 import { env, hasAppwriteAdminConfig, hasAppwriteSessionConfig } from "@/lib/env";
 
 export function getAppwriteSessionCookieName() {
@@ -25,7 +25,8 @@ export function createAppwriteAdminClient() {
 
   return {
     account: new Account(client),
-    tables: new TablesDB(client)
+    tables: new TablesDB(client),
+    users: new Users(client)
   };
 }
 

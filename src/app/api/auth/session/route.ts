@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getAppwriteJwtCookieName, getAppwriteSessionCookieName } from "@/lib/appwrite/server";
+import { clearGitHubTokenCookie } from "@/lib/github-oauth";
 
 export const runtime = "nodejs";
 
@@ -23,5 +24,6 @@ export async function POST(request: Request) {
 export async function DELETE() {
   cookies().delete(getAppwriteJwtCookieName());
   cookies().delete(getAppwriteSessionCookieName());
+  clearGitHubTokenCookie();
   return NextResponse.json({ ok: true });
 }

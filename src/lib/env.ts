@@ -14,7 +14,10 @@ const envSchema = z.object({
   GEMINI_MODEL: z.string().optional(),
   BROWSERLESS_API_KEY: z.string().optional(),
   NEXT_PUBLIC_NOVUS_APP_ID: z.string().optional(),
-  DEMO_APP_URL: z.string().url().optional().or(z.literal(""))
+  DEMO_APP_URL: z.string().url().optional().or(z.literal("")),
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+  GITHUB_APP_ID: z.string().optional()
 });
 
 const parsedEnv = envSchema.parse(process.env);

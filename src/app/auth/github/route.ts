@@ -1,23 +1,27 @@
 import { NextResponse } from "next/server";
-import { OAuthProvider } from "node-appwrite";
-import { createAppwriteAdminClient } from "@/lib/appwrite/server";
 import { getBaseUrl } from "@/lib/env";
+import {
+  buildGitHubAuthorizeUrl,
+  createGitHubOAuthState,
+  getGitHubOAuthCallbackUrl,
+  hasGitHubOAuthConfig,
+  setGitHubOAuthStateCookie
+} from "@/lib/github-oauth";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const appwrite = createAppwriteAdminClient();
-  if (!appwrite) {
-    return NextResponse.redirect(`${getBaseUrl(request.url)}/dashboard?auth=appwrite-not-configured`);
+  const baseUrl = getBaseUrl(request.url);
+
+  if (!hasGitHubOAuthConfig()) {
+    return NextResponse.redirect(`${baseUrl}/dashboard?auth=github-not-configured`);
   }
 
-  const baseUrl = getBaseUrl(request.url);
-  const redirectUrl = await appwrite.account.createOAuth2Token({
-    provider: OAuthProvider.Github,
-    success: `${baseUrl}/auth/callback`,
-    failure: `${baseUrl}/dashboard?auth=github-failed`,
-    scopes: ["read:user", "user:email", "repo"]
-  });
+  const state = createGitHubOAuthState();
+  setGitHubOAuthStateCookie(state, request.url);
 
-  return NextResponse.redirect(redirectUrl);
+  const redirectUri = getGitHubOAuthCallbackUrl(request.url);
+  const authorizeUrl = buildGitHubAuthorizeUrl({ state, redirectUri });
+
+  return NextResponse.redirect(authorizeUrl);
 }

@@ -8,6 +8,12 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { getScanStats, listRecentScans, listScansForUser } from "@/lib/scans";
 import type { Scan, ScanStatus } from "@/lib/types";
 
+const authMessages: Record<string, string> = {
+  "github-connected": "GitHub connected. Your private repositories are now available for scans.",
+  "github-failed": "GitHub connection failed. Try connecting again.",
+  "github-not-configured": "GitHub OAuth is not configured on this deployment."
+};
+
 const statusClasses: Record<ScanStatus, string> = {
   pending: "bg-gray-100 text-gray-700",
   running: "bg-yellow-100 text-yellow-900",
@@ -43,9 +49,15 @@ function ScanLogRow({ scan }: { scan: Scan }) {
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams
+}: {
+  searchParams?: { auth?: string; reason?: string };
+}) {
   const user = await getAuthenticatedUser();
   if (!user) redirect("/sign-in");
+
+  const authNotice = searchParams?.auth ? authMessages[searchParams.auth] : null;
 
   const host = headers().get("host") ?? "localhost:3000";
   const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
@@ -67,6 +79,13 @@ export default async function DashboardPage() {
             Open demo app
           </Link>
         </div>
+
+        {authNotice ? (
+          <div className="mt-6 rounded border border-line bg-white px-4 py-3 text-sm text-gray-700 shadow-crisp">
+            {authNotice}
+            {searchParams?.reason ? <span className="mt-1 block text-xs text-gray-500">{searchParams.reason}</span> : null}
+          </div>
+        ) : null}
 
         <div className="mt-8 grid gap-4 md:grid-cols-4">
           <div className="rounded border border-line bg-white p-5 shadow-crisp">
