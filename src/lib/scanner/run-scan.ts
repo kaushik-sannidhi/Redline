@@ -3,6 +3,9 @@ import { updateScan, upsertBadge } from "@/lib/scans";
 import { analyzeHeaders } from "@/lib/scanner/headers";
 import { crawlApp } from "@/lib/scanner/crawl";
 import { scanScriptUrls } from "@/lib/scanner/secrets";
+import { fetchGitHubPackageJson, fetchGitHubSourceSnapshot } from "@/lib/github";
+import { analyzeRepoCode } from "@/lib/scanner/code";
+import { scanDependenciesFromPackageJson } from "@/lib/scanner/dependencies";
 
 type Emit = (event: ScanProgressEvent) => Promise<void> | void;
 
@@ -46,6 +49,25 @@ export async function runScan(scan: Scan, emit: Emit): Promise<Scan> {
     findings = uniqueFindings([...findings, ...scriptFindings]);
     current = await updateScan(scan.hash, { findings, stack, status: "running" });
     await emitDone(emit, "js", scriptFindings);
+
+    if (scan.repoUrl) {
+      await emit({ step: "code", status: "running" });
+      const sourceSnapshot = await fetchGitHubSourceSnapshot(scan.repoUrl);
+      const codeFindings = await analyzeRepoCode(sourceSnapshot);
+      findings = uniqueFindings([...findings, ...codeFindings]);
+      current = await updateScan(scan.hash, { findings, stack, status: "running" });
+      await emitDone(emit, "code", codeFindings);
+
+      await emit({ step: "deps", status: "running" });
+      const packageJson = await fetchGitHubPackageJson(scan.repoUrl);
+      const depFindings = packageJson ? await scanDependenciesFromPackageJson(packageJson).catch(() => []) : [];
+      findings = uniqueFindings([...findings, ...depFindings]);
+      current = await updateScan(scan.hash, { findings, stack, status: "running" });
+      await emitDone(emit, "deps", depFindings);
+    } else {
+      await emitDone(emit, "code");
+      await emitDone(emit, "deps");
+    }
 
     await emitDone(emit, "storage");
     await emitDone(emit, "forms");

@@ -11,15 +11,19 @@ type StepState = "waiting" | "running" | "done" | "error";
 export function ScanProgress({ hash }: { hash: string }) {
   const router = useRouter();
   const [events, setEvents] = useState<Record<string, StepState>>({});
+  const [findingCounts, setFindingCounts] = useState<Record<string, number>>({});
   const [message, setMessage] = useState("");
 
-  const visibleSteps = useMemo(() => SCAN_STEPS.filter((step) => !step.optional), []);
+  const visibleSteps = useMemo(() => SCAN_STEPS.filter((step) => !step.optional || events[step.id]), [events]);
 
   useEffect(() => {
     const source = new EventSource(`/api/scan/${hash}/stream`);
     source.onmessage = (event) => {
       const payload = JSON.parse(event.data) as ScanProgressEvent;
       setEvents((current) => ({ ...current, [payload.step]: payload.status === "done" ? "done" : payload.status }));
+      if (payload.findings?.length) {
+        setFindingCounts((current) => ({ ...current, [payload.step]: payload.findings?.length ?? 0 }));
+      }
       if (payload.message) setMessage(payload.message);
       if (payload.step === "done" && payload.status === "done" && payload.scan) {
         track("scan_completed", {
@@ -55,6 +59,11 @@ export function ScanProgress({ hash }: { hash: string }) {
                 ].join(" ")}
               />
               <span className="flex-1 text-sm font-medium text-gray-800">{step.label}</span>
+              {findingCounts[step.id] ? (
+                <span className="text-xs font-semibold text-danger">
+                  {findingCounts[step.id]} issue{findingCounts[step.id] === 1 ? "" : "s"}
+                </span>
+              ) : null}
               <span className="text-xs uppercase tracking-wide text-gray-500">{state}</span>
             </li>
           );

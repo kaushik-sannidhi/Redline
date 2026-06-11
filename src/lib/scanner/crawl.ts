@@ -47,7 +47,8 @@ function scanHtmlForCrawlFindings(html: string, pageUrl: string): Finding[] {
       what: "Your app stores auth-like data in localStorage.",
       why: "Browser storage is readable by any script on the page, including injected or third-party scripts.",
       fix: "Use httpOnly cookies for auth tokens instead of localStorage.",
-      affected: [pageUrl]
+      affected: [pageUrl],
+      autoFixable: true
     });
   }
 
@@ -60,7 +61,8 @@ function scanHtmlForCrawlFindings(html: string, pageUrl: string): Finding[] {
       what: "A POST form was found without a protection token.",
       why: "Attackers may be able to trick logged-in users into submitting the form.",
       fix: "Add a server-verified CSRF token to all POST forms.",
-      affected: [pageUrl]
+      affected: [pageUrl],
+      autoFixable: true
     });
   }
 
@@ -74,7 +76,8 @@ function scanHtmlForCrawlFindings(html: string, pageUrl: string): Finding[] {
       why: "Debug logs often expose data that should not ship to real users.",
       fix: "Remove console.log statements before launch or strip sensitive fields.",
       evidence: "console.log(...)",
-      affected: [pageUrl]
+      affected: [pageUrl],
+      autoFixable: true
     });
   }
 
@@ -159,7 +162,8 @@ async function crawlWithBrowserlessEndpoint(endpoint: string, url: string, heade
             what: `Your app stores "${key}" in localStorage.`,
             why: "Browser storage is readable by any script on the page, including injected or third-party scripts.",
             fix: "Use httpOnly cookies for auth tokens instead of localStorage.",
-            affected: [current]
+            affected: [current],
+            autoFixable: true
           });
         }
       }
@@ -203,7 +207,8 @@ async function crawlWithBrowserlessEndpoint(endpoint: string, url: string, heade
         what: "The page prints user or secret-like data to the browser console.",
         why: "Debug logs often expose data that should not ship to real users.",
         fix: "Remove console.log statements before launch or strip sensitive fields.",
-        evidence: leakyLog.slice(0, 60)
+        evidence: leakyLog.slice(0, 60),
+        autoFixable: true
       });
     }
 

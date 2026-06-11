@@ -2,7 +2,7 @@
 
 import { track } from "@/lib/analytics";
 
-export function ConnectGitHubButton() {
+export function ConnectGitHubButton({ label = "Connect GitHub" }: { label?: string }) {
   function connect() {
     track("github_connected", {});
     window.location.assign("/auth/github");
@@ -10,7 +10,7 @@ export function ConnectGitHubButton() {
 
   return (
     <button className="rounded bg-ink px-4 py-2 font-semibold text-white" onClick={connect} type="button">
-      Connect GitHub
+      {label}
     </button>
   );
 }

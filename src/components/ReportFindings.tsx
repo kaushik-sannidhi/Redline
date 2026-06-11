@@ -5,7 +5,7 @@ import type { Finding, FindingSeverity, ScanSummary } from "@/lib/types";
 import { SeverityFilter } from "@/components/SeverityFilter";
 import { FindingCard } from "@/components/FindingCard";
 
-export function ReportFindings({ findings, summary }: { findings: Finding[]; summary: ScanSummary }) {
+export function ReportFindings({ findings, stack, summary }: { findings: Finding[]; stack: string[]; summary: ScanSummary }) {
   const [active, setActive] = useState<"all" | FindingSeverity>("all");
   const filtered = useMemo(
     () => (active === "all" ? findings : findings.filter((finding) => finding.severity === active)),
@@ -21,7 +21,7 @@ export function ReportFindings({ findings, summary }: { findings: Finding[]; sum
       />
       <div className="mt-5 space-y-4">
         {filtered.length ? (
-          filtered.map((finding, index) => <FindingCard finding={finding} key={`${finding.id}-${index}`} />)
+          filtered.map((finding, index) => <FindingCard finding={finding} key={`${finding.id}-${index}`} stack={stack} />)
         ) : (
           <p className="rounded border border-line bg-white p-5 text-sm text-gray-600">No findings in this severity.</p>
         )}

@@ -1,4 +1,6 @@
 import { nanoid } from "nanoid";
+import { mkdir, readFile, writeFile } from "fs/promises";
+import path from "path";
 import { ID, Query, type Models } from "node-appwrite";
 import type { Finding, Scan, ScanStatus } from "@/lib/types";
 import { calculateScore, summarizeFindings } from "@/lib/score";
@@ -21,6 +23,7 @@ type ScanRow = Models.Row & {
 };
 
 const memoryScans = new Map<string, Scan>();
+const localStorePath = path.join(process.cwd(), ".data", "scans.json");
 
 function now() {
   return new Date().toISOString();
@@ -99,7 +102,7 @@ export async function createScan(input: { url: string; repoUrl?: string | null; 
   const tableIds = getAppwriteTableIds();
 
   if (!appwrite || !tableIds) {
-    memoryScans.set(scan.hash, scan);
+    await writeLocalScans([scan, ...(await readLocalScans())]);
     return scan;
   }
 
@@ -108,15 +111,18 @@ export async function createScan(input: { url: string; repoUrl?: string | null; 
     tableId: tableIds.scansTableId,
     rowId: ID.unique(),
     data: scanToRowData(scan)
+  }).catch(async () => {
+    await writeLocalScans([scan, ...(await readLocalScans())]);
+    return null;
   });
 
-  return rowToScan(row);
+  return row ? rowToScan(row) : scan;
 }
 
 export async function getScan(hash: string): Promise<Scan | null> {
   const appwrite = createAppwriteAdminClient();
   const tableIds = getAppwriteTableIds();
-  if (!appwrite || !tableIds) return memoryScans.get(hash) ?? null;
+  if (!appwrite || !tableIds) return (await readLocalScans()).find((scan) => scan.hash === hash) ?? null;
 
   try {
     const rows = await appwrite.tables.listRows<ScanRow>({
@@ -127,7 +133,7 @@ export async function getScan(hash: string): Promise<Scan | null> {
     const row = rows.rows[0];
     return row ? rowToScan(row) : null;
   } catch {
-    return null;
+    return (await readLocalScans()).find((scan) => scan.hash === hash) ?? null;
   }
 }
 
@@ -135,7 +141,7 @@ export async function listScansForUser(userId: string): Promise<Scan[]> {
   const appwrite = createAppwriteAdminClient();
   const tableIds = getAppwriteTableIds();
   if (!appwrite || !tableIds) {
-    return Array.from(memoryScans.values())
+    return (await readLocalScans())
       .filter((scan) => scan.userId === userId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
@@ -148,7 +154,78 @@ export async function listScansForUser(userId: string): Promise<Scan[]> {
     });
     return rows.rows.map(rowToScan);
   } catch {
+    return (await readLocalScans())
+      .filter((scan) => scan.userId === userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+}
+
+export async function listRecentScans(limit = 50): Promise<Scan[]> {
+  const appwrite = createAppwriteAdminClient();
+  const tableIds = getAppwriteTableIds();
+  if (!appwrite || !tableIds) {
+    return (await readLocalScans()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
+
+  try {
+    const rows = await appwrite.tables.listRows<ScanRow>({
+      databaseId: tableIds.databaseId,
+      tableId: tableIds.scansTableId,
+      queries: [Query.orderDesc("$createdAt"), Query.limit(limit)]
+    });
+    return rows.rows.map(rowToScan);
+  } catch {
+    return (await readLocalScans()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
+}
+
+async function readLocalScans(): Promise<Scan[]> {
+  if (memoryScans.size) return Array.from(memoryScans.values());
+
+  try {
+    const raw = await readFile(localStorePath, "utf8");
+    const scans = JSON.parse(raw) as Scan[];
+    scans.forEach((scan) => memoryScans.set(scan.hash, scan));
+    return scans;
+  } catch {
     return [];
+  }
+}
+
+async function writeLocalScans(scans: Scan[]) {
+  memoryScans.clear();
+  scans.forEach((scan) => memoryScans.set(scan.hash, scan));
+  try {
+    await mkdir(path.dirname(localStorePath), { recursive: true });
+    await writeFile(localStorePath, JSON.stringify(scans, null, 2));
+  } catch {
+    // Memory keeps the current server process working if disk persistence is unavailable.
+  }
+}
+
+export async function getScanStats(): Promise<{ scansRun: number; keysFound: number; appsSecured: number }> {
+  const appwrite = createAppwriteAdminClient();
+  const tableIds = getAppwriteTableIds();
+  const summarize = (scans: Scan[]) => ({
+    scansRun: scans.length,
+    keysFound: scans.reduce(
+      (count, scan) => count + scan.findings.filter((finding) => finding.category === "secret").length,
+      0
+    ),
+    appsSecured: scans.filter((scan) => scan.status === "complete" && scan.score >= 70).length
+  });
+
+  if (!appwrite || !tableIds) return summarize(await readLocalScans());
+
+  try {
+    const rows = await appwrite.tables.listRows<ScanRow>({
+      databaseId: tableIds.databaseId,
+      tableId: tableIds.scansTableId,
+      queries: [Query.orderDesc("$createdAt"), Query.limit(100)]
+    });
+    return summarize(rows.rows.map(rowToScan));
+  } catch {
+    return summarize(await readLocalScans());
   }
 }
 
@@ -171,7 +248,8 @@ export async function updateScan(
   const appwrite = createAppwriteAdminClient();
   const tableIds = getAppwriteTableIds();
   if (!appwrite || !tableIds) {
-    memoryScans.set(hash, updated);
+    const scans = await readLocalScans();
+    await writeLocalScans(scans.map((scan) => (scan.hash === hash ? updated : scan)));
     return updated;
   }
 
@@ -180,9 +258,14 @@ export async function updateScan(
     tableId: tableIds.scansTableId,
     rowId: existing.id,
     data: scanToRowData(updated)
+  }).catch(async () => {
+    const scans = await readLocalScans();
+    const hasExisting = scans.some((scan) => scan.hash === hash);
+    await writeLocalScans(hasExisting ? scans.map((scan) => (scan.hash === hash ? updated : scan)) : [updated, ...scans]);
+    return null;
   });
 
-  return rowToScan(row);
+  return row ? rowToScan(row) : updated;
 }
 
 export async function upsertBadge(scan: Scan) {
@@ -216,10 +299,14 @@ export async function upsertBadge(scan: Scan) {
     // A badge is a cache of scan state; failures should not break scan completion.
   }
 
-  await appwrite.tables.createRow({
-    databaseId: tableIds.databaseId,
-    tableId: tableIds.badgesTableId,
-    rowId: ID.unique(),
-    data
-  });
+  try {
+    await appwrite.tables.createRow({
+      databaseId: tableIds.databaseId,
+      tableId: tableIds.badgesTableId,
+      rowId: ID.unique(),
+      data
+    });
+  } catch {
+    // Badge persistence should never block the scan/report flow.
+  }
 }

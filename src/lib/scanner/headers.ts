@@ -53,11 +53,40 @@ const SECURITY_HEADER_CHECKS: Array<{
     what: "No referrer privacy rule was found.",
     why: "URLs your users visit may be shared with third-party services.",
     fix: "Add: Referrer-Policy: strict-origin-when-cross-origin."
+  },
+  {
+    id: "missing-permissions",
+    header: "permissions-policy",
+    severity: "low",
+    title: "Browser feature access is not restricted",
+    what: "No browser feature access rule was found.",
+    why: "Third-party scripts may be able to ask for camera, microphone, or location access.",
+    fix: "Add: Permissions-Policy: camera=(), microphone=(), geolocation=()."
   }
 ];
 
 export async function analyzeHeaders(url: string): Promise<{ findings: Finding[]; headers: Record<string, string> }> {
-  const response = await fetch(url, { redirect: "follow", cache: "no-store" });
+  let response: Response;
+  try {
+    response = await fetch(url, { redirect: "follow", cache: "no-store" });
+  } catch {
+    return {
+      headers: {},
+      findings: [
+        {
+          id: "url-unreachable",
+          category: "header",
+          severity: "critical",
+          title: "URL could not be reached",
+          what: "Redline could not connect to this URL.",
+          why: "If Redline cannot reach it, neither can your users.",
+          fix: "Verify the URL is publicly deployed and not behind a login wall.",
+          affected: [url]
+        }
+      ]
+    };
+  }
+
   const headers = Object.fromEntries(response.headers.entries());
   const findings: Finding[] = [];
 
@@ -84,6 +113,32 @@ export async function analyzeHeaders(url: string): Promise<{ findings: Finding[]
         affected: [url]
       });
     }
+  }
+
+  const setCookie = headers["set-cookie"];
+  if (setCookie && !/httponly/i.test(setCookie)) {
+    findings.push({
+      id: "cookie-no-httponly",
+      category: "header",
+      severity: "high",
+      title: "Session cookies are readable by JavaScript",
+      what: "A cookie was set without JavaScript read protection.",
+      why: "Injected or third-party scripts could read this cookie.",
+      fix: "Set authentication cookies with HttpOnly, Secure, and SameSite=Strict.",
+      affected: [url]
+    });
+  }
+  if (setCookie && !/secure/i.test(setCookie)) {
+    findings.push({
+      id: "cookie-no-secure",
+      category: "header",
+      severity: "medium",
+      title: "Cookies can travel over unsafe connections",
+      what: "A cookie was set without the Secure flag.",
+      why: "That cookie could be exposed if the browser ever makes an unsafe request.",
+      fix: "Set authentication cookies with the Secure flag.",
+      affected: [url]
+    });
   }
 
   return { findings, headers };

@@ -12,6 +12,7 @@ export interface Finding {
   fix: string;
   evidence?: string;
   affected?: string[];
+  autoFixable?: boolean;
 }
 
 export interface ScanSummary {
@@ -53,4 +54,11 @@ export interface ScanStep {
   id: string;
   label: string;
   optional?: boolean;
+}
+
+export interface RemediationResult {
+  filePath: string;
+  original: string;
+  fixed: string;
+  changesSummary: string;
 }

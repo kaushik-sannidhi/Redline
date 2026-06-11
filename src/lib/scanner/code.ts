@@ -50,7 +50,8 @@ function normalizeFindings(text: string): Finding[] {
         why: String(finding.why),
         fix: String(finding.fix),
         evidence: finding.evidence ? String(finding.evidence).slice(0, 500) : undefined,
-        affected: Array.isArray(finding.affected) ? finding.affected.map(String).slice(0, 8) : undefined
+        affected: Array.isArray(finding.affected) ? finding.affected.map(String).slice(0, 8) : undefined,
+        autoFixable: true
       }));
   } catch {
     return [];

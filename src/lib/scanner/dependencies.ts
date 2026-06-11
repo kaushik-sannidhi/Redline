@@ -23,7 +23,8 @@ export async function scanDependenciesFromPackageJson(packageJson: string): Prom
           what: `${data.vulns.length} known vulnerability(s) were found in ${name}.`,
           why: "Known vulnerabilities are public and attackers often target them.",
           fix: `Run: npm update ${name}. Check details at https://osv.dev.`,
-          affected: ["package.json"]
+          affected: ["package.json"],
+          autoFixable: true
         });
       }
     } catch {

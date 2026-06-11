@@ -30,7 +30,8 @@ function findingForMatch(pattern: SecretPattern, match: string, affected: string
     why: "Anyone who visits your site can extract this value and use it against your account or data.",
     fix: "Move this key to a server-side environment variable. Never import secret keys in client-side code.",
     evidence: `${match.slice(0, 20)}...`,
-    affected: [affected]
+    affected: [affected],
+    autoFixable: true
   };
 }
 

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { DownloadPdfButton } from "@/components/DownloadPdfButton";
 import { EmbedBadge } from "@/components/EmbedBadge";
 import { ReportFindings } from "@/components/ReportFindings";
+import { RemediationPanel } from "@/components/RemediationPanel";
 import { RescanButton } from "@/components/RescanButton";
 import { ScoreDisplay } from "@/components/ScoreDisplay";
 import { ShareButton } from "@/components/ShareButton";
@@ -13,6 +14,7 @@ import { getScan } from "@/lib/scans";
 export default async function ReportPage({ params }: { params: { hash: string } }) {
   const scan = await getScan(params.hash);
   if (!scan) notFound();
+  const autoFixableFindings = scan.findings.filter((finding) => finding.autoFixable);
 
   return (
     <main>
@@ -37,8 +39,26 @@ export default async function ReportPage({ params }: { params: { hash: string } 
           <StackBadge stack={scan.stack} />
         </div>
         <div className="mt-8">
-          <ReportFindings findings={scan.findings} summary={scan.summary} />
+          <ReportFindings findings={scan.findings} stack={scan.stack} summary={scan.summary} />
         </div>
+        {scan.repoUrl ? (
+          <div className="mt-8">
+            <RemediationPanel autoFixableFindings={autoFixableFindings} hash={scan.hash} />
+          </div>
+        ) : (
+          <div className="mt-8 rounded border border-line bg-white p-5 shadow-crisp">
+            <h2 className="text-xl font-black text-ink">Connect a repo for code fixes</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Add a GitHub repo URL when starting a scan to unlock Gemini file rewrites and downloadable fixed files.
+            </p>
+          </div>
+        )}
+        {scan.repoUrl ? (
+          <div className="mt-4 rounded border border-line bg-white p-5 shadow-crisp">
+            <p className="text-sm font-bold uppercase tracking-wide text-gray-500">Repository</p>
+            <p className="mt-2 break-all font-semibold text-ink">{scan.repoUrl}</p>
+          </div>
+        ) : null}
         <div className="mt-8">
           <EmbedBadge hash={scan.hash} score={scan.score} />
         </div>

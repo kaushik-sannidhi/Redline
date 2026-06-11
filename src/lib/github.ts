@@ -31,6 +31,11 @@ type GitHubTreeItem = {
   url?: string;
 };
 
+export type GitHubSourceFile = {
+  path: string;
+  content: string;
+};
+
 function githubHeaders(accessToken?: string | null): HeadersInit {
   return {
     Accept: "application/vnd.github+json",
@@ -94,15 +99,20 @@ export async function fetchGitHubPackageJson(repoUrl: string, accessToken?: stri
 }
 
 export async function fetchGitHubSourceSnapshot(repoUrl: string, accessToken?: string | null) {
+  const files = await fetchGitHubSourceFiles(repoUrl, accessToken);
+  return files.map((file) => `// FILE: ${file.path}\n${file.content}`).join("\n\n");
+}
+
+export async function fetchGitHubSourceFiles(repoUrl: string, accessToken?: string | null): Promise<GitHubSourceFile[]> {
   const parsed = parseGitHubRepoUrl(repoUrl);
-  if (!parsed) return "";
+  if (!parsed) return [];
 
   try {
     const metadata = await fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`, {
       cache: "no-store",
       headers: githubHeaders(accessToken)
     });
-    if (!metadata.ok) return "";
+    if (!metadata.ok) return [];
     const repo = (await metadata.json()) as { default_branch?: string };
     const branch = repo.default_branch ?? "main";
 
@@ -110,7 +120,7 @@ export async function fetchGitHubSourceSnapshot(repoUrl: string, accessToken?: s
       `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
       { cache: "no-store", headers: githubHeaders(accessToken) }
     );
-    if (!treeResponse.ok) return "";
+    if (!treeResponse.ok) return [];
 
     const treeData = (await treeResponse.json()) as { tree?: GitHubTreeItem[] };
     const files = (treeData.tree ?? [])
@@ -119,7 +129,7 @@ export async function fetchGitHubSourceSnapshot(repoUrl: string, accessToken?: s
       .sort((a, b) => a.path.localeCompare(b.path))
       .slice(0, SOURCE_FILE_LIMIT);
 
-    const chunks: string[] = [];
+    const sourceFiles: GitHubSourceFile[] = [];
     let total = 0;
 
     for (const file of files) {
@@ -133,12 +143,12 @@ export async function fetchGitHubSourceSnapshot(repoUrl: string, accessToken?: s
 
       const remaining = SOURCE_CHAR_LIMIT - total;
       const text = (await response.text()).slice(0, remaining);
-      chunks.push(`// FILE: ${file.path}\n${text}`);
+      sourceFiles.push({ path: file.path, content: text });
       total += text.length;
     }
 
-    return chunks.join("\n\n");
+    return sourceFiles;
   } catch {
-    return "";
+    return [];
   }
 }
