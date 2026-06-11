@@ -122,7 +122,9 @@ export function UrlScanForm({ defaultUrl }: { defaultUrl: string }) {
             <p className="text-sm font-black text-ink">GitHub repository</p>
             <p className="mt-1 text-xs text-gray-500">Optional. Connected repos enable code analysis and Gemini pull requests.</p>
           </div>
-          {needsGitHubConnection ? <ConnectGitHubButton label="Connect GitHub account" /> : null}
+          {needsGitHubConnection ? (
+            <ConnectGitHubButton label="Connect GitHub account" mode="connect" />
+          ) : null}
         </div>
 
         {isLoadingRepos ? <p className="mt-3 text-sm text-gray-600">Loading repositories...</p> : null}

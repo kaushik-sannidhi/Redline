@@ -50,13 +50,22 @@ DEMO_APP_URL=
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 GITHUB_APP_ID=
+APP_URL=https://letsredline.appwrite.network
 ```
 
 GitHub App setup for private repository access:
 
 1. In your GitHub App settings, enable user authorization (OAuth).
 2. Set the callback URL to `https://your-domain/auth/github/callback` (and `http://localhost:3000/auth/github/callback` for local dev).
-3. Add `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_APP_ID` to your environment.
+3. Add `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_APP_ID`, and `APP_URL` to your environment. `APP_URL` must match the public site origin so GitHub OAuth receives the same callback URL you registered.
+
+Appwrite GitHub OAuth for sign-in and sign-up:
+
+1. In Appwrite Console, enable the GitHub auth provider and paste your OAuth app credentials.
+2. In that GitHub OAuth app, set the authorization callback URL to:
+   `https://nyc.cloud.appwrite.io/v1/account/sessions/oauth2/callback/github/6a296d2600224c5f6084`
+3. Add your app URL (for example `http://localhost:3000` and your production domain) to Appwrite Platforms.
+4. Redline sends users to `/auth/github/login`, Appwrite completes OAuth, then redirects back to `/auth/callback`.
 
 Create the Appwrite TablesDB schema described in `appwrite/schema.md` before enabling production persistence.
 The browser Appwrite SDK is initialized in `src/lib/appwrite/client.ts`, and `client.ping()` is called automatically from the root layout through `src/components/AppwritePing.tsx`.
@@ -83,6 +92,7 @@ Manual smoke path:
 
 - Deploy the Next.js app to Vercel.
 - Configure your GitHub App callback URL to `/auth/github/callback` and set `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` in the deployment environment.
+- Configure Appwrite GitHub OAuth with callback URL `https://nyc.cloud.appwrite.io/v1/account/sessions/oauth2/callback/github/6a296d2600224c5f6084` and add your site to Appwrite Platforms.
 - Set `BROWSERLESS_API_KEY` for reliable production Playwright execution. Redline derives the Browserless CDP WebSocket endpoints in code and tries the known regional endpoints before falling back to fetch-only crawling.
 - Novus by Pendo is installed in the root layout with the API key from the Novus branch. Set `NEXT_PUBLIC_NOVUS_APP_ID` only if you need to override that key.
 - Keep first scans anonymous; GitHub auth is only for saved history and repo analysis.

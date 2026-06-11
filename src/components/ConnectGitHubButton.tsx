@@ -2,10 +2,16 @@
 
 import { track } from "@/lib/analytics";
 
-export function ConnectGitHubButton({ label = "Connect GitHub" }: { label?: string }) {
+export function ConnectGitHubButton({
+  label = "Connect GitHub",
+  mode = "login"
+}: {
+  label?: string;
+  mode?: "login" | "connect";
+}) {
   function connect() {
-    track("github_connected", {});
-    window.location.assign("/auth/github");
+    track("github_connected", { mode });
+    window.location.assign(mode === "connect" ? "/auth/github" : "/auth/github/login");
   }
 
   return (

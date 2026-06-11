@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUserId } from "@/lib/auth";
 import { getBaseUrl } from "@/lib/env";
 import {
-  applyAppwriteSessionCookie,
-  ensureAppwriteSessionFromGitHub
-} from "@/lib/github-session";
-import {
   clearGitHubOAuthStateCookie,
   exchangeGitHubCode,
   getGitHubOAuthCallbackUrl,
@@ -31,6 +27,11 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${baseUrl}/dashboard?auth=github-not-configured`);
   }
 
+  const userId = await getAuthenticatedUserId();
+  if (!userId) {
+    return NextResponse.redirect(`${baseUrl}/sign-in?auth=github-connect-requires-login`);
+  }
+
   const expectedState = readGitHubOAuthStateCookie();
   clearGitHubOAuthStateCookie();
 
@@ -39,15 +40,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const redirectUri = getGitHubOAuthCallbackUrl(request.url);
+    const redirectUri = getGitHubOAuthCallbackUrl(request);
     const accessToken = await exchangeGitHubCode({ code, redirectUri });
     setGitHubTokenCookie(accessToken, request.url);
-
-    const userId = await getAuthenticatedUserId();
-    if (!userId) {
-      const { session } = await ensureAppwriteSessionFromGitHub(accessToken);
-      applyAppwriteSessionCookie(session, request.url);
-    }
 
     return NextResponse.redirect(`${baseUrl}/dashboard?auth=github-connected`);
   } catch (callbackError) {

@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
-import { env } from "@/lib/env";
+import { env, getRequestOrigin } from "@/lib/env";
 
 export const GITHUB_TOKEN_COOKIE = "redline_github_token";
 export const GITHUB_OAUTH_STATE_COOKIE = "redline_github_oauth_state";
@@ -27,8 +27,8 @@ export function hasGitHubOAuthConfig(): boolean {
   return Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET);
 }
 
-export function getGitHubOAuthCallbackUrl(requestUrl: string): string {
-  return `${new URL(requestUrl).origin}/auth/github/callback`;
+export function getGitHubOAuthCallbackUrl(request: Request): string {
+  return `${getRequestOrigin(request)}/auth/github/callback`;
 }
 
 export function createGitHubOAuthState(): string {

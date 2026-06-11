@@ -71,7 +71,10 @@ export function AuthForm({
         </p>
       </div>
       <div className="mt-6">
-        <ConnectGitHubButton label={mode === "sign-up" ? "Sign up with GitHub" : "Sign in with GitHub"} />
+        <ConnectGitHubButton
+          label={mode === "sign-up" ? "Sign up with GitHub" : "Sign in with GitHub"}
+          mode="login"
+        />
       </div>
       <div className="my-6 flex items-center gap-3 text-xs font-bold uppercase tracking-wide text-gray-400">
         <span className="h-px flex-1 bg-line" />

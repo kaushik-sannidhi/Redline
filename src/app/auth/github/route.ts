@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const state = createGitHubOAuthState();
   setGitHubOAuthStateCookie(state, request.url);
 
-  const redirectUri = getGitHubOAuthCallbackUrl(request.url);
+  const redirectUri = getGitHubOAuthCallbackUrl(request);
   const authorizeUrl = buildGitHubAuthorizeUrl({ state, redirectUri });
 
   return NextResponse.redirect(authorizeUrl);

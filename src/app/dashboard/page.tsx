@@ -10,6 +10,7 @@ import type { Scan, ScanStatus } from "@/lib/types";
 
 const authMessages: Record<string, string> = {
   "github-connected": "GitHub connected. Your private repositories are now available for scans.",
+  "github-signed-in": "Signed in with GitHub. Your repositories are ready for scans.",
   "github-failed": "GitHub connection failed. Try connecting again.",
   "github-not-configured": "GitHub OAuth is not configured on this deployment."
 };
