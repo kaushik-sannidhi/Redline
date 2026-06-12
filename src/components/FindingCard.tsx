@@ -21,14 +21,14 @@ export function FindingCard({ finding, stack }: { finding: Finding; stack: strin
   async function copyFix() {
     await navigator.clipboard.writeText(finding.fix);
     setCopied(true);
-    track("fix_copied", { finding_id: finding.id, severity: finding.severity });
+    track("fix_copied", { finding_id: finding.id, severity: finding.severity, category: finding.category });
     setTimeout(() => setCopied(false), 1600);
   }
 
   async function requestAiFix() {
     setIsFixing(true);
     setFixError("");
-    track("ai_fix_requested", { finding_id: finding.id });
+    track("ai_fix_requested", { finding_id: finding.id, severity: finding.severity, category: finding.category });
     try {
       const response = await fetch("/api/fix", {
         method: "POST",
@@ -38,8 +38,10 @@ export function FindingCard({ finding, stack }: { finding: Finding; stack: strin
       const data = (await response.json()) as { fix?: string; error?: string };
       if (!response.ok) throw new Error(data.error ?? "Could not generate fix");
       setAiFix(data.fix ?? finding.fix);
+      track("ai_fix_completed", { finding_id: finding.id, severity: finding.severity, category: finding.category, success: true });
     } catch (error) {
       setFixError(error instanceof Error ? error.message : "Could not generate fix");
+      track("ai_fix_completed", { finding_id: finding.id, severity: finding.severity, category: finding.category, success: false });
     } finally {
       setIsFixing(false);
     }
@@ -52,7 +54,7 @@ export function FindingCard({ finding, stack }: { finding: Finding; stack: strin
           className="min-w-0 flex-1 text-left"
           onClick={() => {
             setIsOpen((current) => !current);
-            if (!isOpen) track("finding_expanded", { finding_id: finding.id, severity: finding.severity });
+            if (!isOpen) track("finding_expanded", { finding_id: finding.id, severity: finding.severity, category: finding.category });
           }}
           type="button"
         >
