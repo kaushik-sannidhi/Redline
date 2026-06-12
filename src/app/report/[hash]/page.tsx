@@ -27,7 +27,7 @@ export default async function ReportPage({ params }: { params: { hash: string } 
           <div className="flex flex-wrap gap-2">
             <ShareButton score={scan.score} />
             <RescanButton hash={scan.hash} previousScore={scan.score} />
-            <DownloadPdfButton />
+            <DownloadPdfButton score={scan.score} totalFindings={scan.summary.total} />
           </div>
         </div>
         <div className="mt-6">

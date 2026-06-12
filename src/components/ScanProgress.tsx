@@ -30,16 +30,23 @@ export function ScanProgress({ hash }: { hash: string }) {
           score: payload.scan.score,
           critical_count: payload.scan.summary.critical,
           high_count: payload.scan.summary.high,
+          medium_count: payload.scan.summary.medium,
+          low_count: payload.scan.summary.low,
+          total_findings: payload.scan.summary.total,
           stack: payload.scan.stack
         });
         source.close();
         setTimeout(() => router.push(`/report/${hash}`), 600);
       }
-      if (payload.status === "error") source.close();
+      if (payload.status === "error") {
+        track("scan_error", { error_step: payload.step, error_message: payload.message ?? "" });
+        source.close();
+      }
     };
     source.onerror = () => {
       setEvents((current) => ({ ...current, done: "error" }));
       setMessage("The scan stream disconnected. Refresh to recover the latest report state.");
+      track("scan_error", { error_step: "stream", error_message: "The scan stream disconnected" });
       source.close();
     };
     return () => source.close();

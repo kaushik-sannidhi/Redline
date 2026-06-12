@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Account, Client, ID } from "appwrite";
 import { ConnectGitHubButton } from "@/components/ConnectGitHubButton";
+import { track } from "@/lib/analytics";
 
 export function AuthForm({
   appwriteEndpoint,
@@ -53,6 +54,11 @@ export function AuthForm({
       });
       const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error ?? "Could not continue");
+      if (mode === "sign-up") {
+        track("sign_up_completed", { auth_method: "email" });
+      } else {
+        track("sign_in_completed", { auth_method: "email" });
+      }
       router.push("/dashboard");
       router.refresh();
     } catch (authError) {

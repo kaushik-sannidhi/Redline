@@ -36,9 +36,15 @@ export function RemediationPanel({
       const data = (await response.json()) as { pullRequests?: RemediationPullRequest[]; error?: string };
       if (!response.ok) throw new Error(data.error ?? "Could not remediate files");
       setPullRequests(data.pullRequests ?? []);
-      track("remediation_completed", { pull_request_count: data.pullRequests?.filter((item) => item.pullRequestUrl).length ?? 0 });
+      track("remediation_completed", {
+        pull_request_count: data.pullRequests?.filter((item) => item.pullRequestUrl).length ?? 0,
+        finding_count: selectedIndexes.length,
+        failed_count: data.pullRequests?.filter((item) => !item.pullRequestUrl).length ?? 0
+      });
     } catch (remediationError) {
-      setError(remediationError instanceof Error ? remediationError.message : "Could not create pull requests");
+      const errorMessage = remediationError instanceof Error ? remediationError.message : "Could not create pull requests";
+      setError(errorMessage);
+      track("remediation_failed", { finding_count: selectedIndexes.length, error_message: errorMessage });
     } finally {
       setIsLoading(false);
     }
