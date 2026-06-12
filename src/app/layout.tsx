@@ -1,13 +1,8 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
-import { env } from "@/lib/env";
 
-const NOVUS_PENDO_API_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-  env.NEXT_PUBLIC_NOVUS_APP_ID ?? ""
-)
-  ? env.NEXT_PUBLIC_NOVUS_APP_ID
-  : "";
+const NOVUS_PENDO_API_KEY = '4b23a172-39c9-489b-ad3b-a7d79e5856fe';
 
 export const metadata: Metadata = {
   title: "Redline",
@@ -30,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   o[m]=o[m]||function(){o._q[m===v[0]?'unshift':'push']([m].concat([].slice.call(arguments,0)));};})(v[w]);
   y=e.createElement(n);y.async=!0;y.src='https://cdn.pendo.io/agent/static/'+apiKey+'/pendo.js';
   z=e.getElementsByTagName(n)[0];z.parentNode.insertBefore(y,z);})(window,document,'script','pendo');
-})('${NOVUS_PENDO_API_KEY}');
+})('4b23a172-39c9-489b-ad3b-a7d79e5856fe');
 
 pendo.initialize({
   visitor: {
